@@ -1,0 +1,792 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+const GLOBAL_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  *, *::before, *::after {
+    font-family: 'Press Start 2P', cursive;
+    margin: 0; padding: 0;
+    box-sizing: border-box;
+  }
+  html, body, #root {
+    background: #000 !important;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .cursor-blink {
+    display: inline-block; width: 2px; height: 12px;
+    animation: blink 1s step-end infinite;
+    margin-left: 4px; vertical-align: middle;
+  }
+
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-behavior: smooth;
+  }
+  *::-webkit-scrollbar { display: none; }
+`;
+
+// ─── ICONS ────────────────────────────────────────────────────────────────────
+const PixelHeart = ({ size = 16, filled = false, color = '#ff0000' }) => (
+  <svg width={size} height={size} viewBox="0 0 10 10" style={{ display:'block', imageRendering:'pixelated' }} xmlns="http://www.w3.org/2000/svg">
+    {filled ? (
+      <>
+        <rect x="1" y="2" width="2" height="1" fill={color}/>
+        <rect x="7" y="2" width="2" height="1" fill={color}/>
+        <rect x="0" y="3" width="4" height="1" fill={color}/>
+        <rect x="6" y="3" width="4" height="1" fill={color}/>
+        <rect x="0" y="4" width="10" height="2" fill={color}/>
+        <rect x="1" y="6" width="8" height="1" fill={color}/>
+        <rect x="2" y="7" width="6" height="1" fill={color}/>
+        <rect x="3" y="8" width="4" height="1" fill={color}/>
+        <rect x="4" y="9" width="2" height="1" fill={color}/>
+      </>
+    ) : (
+      <>
+        <rect x="1" y="2" width="2" height="1" fill={color}/>
+        <rect x="7" y="2" width="2" height="1" fill={color}/>
+        <rect x="0" y="3" width="1" height="1" fill={color}/>
+        <rect x="3" y="3" width="1" height="1" fill={color}/>
+        <rect x="6" y="3" width="1" height="1" fill={color}/>
+        <rect x="9" y="3" width="1" height="1" fill={color}/>
+        <rect x="0" y="4" width="1" height="2" fill={color}/>
+        <rect x="9" y="4" width="1" height="2" fill={color}/>
+        <rect x="1" y="6" width="1" height="1" fill={color}/>
+        <rect x="8" y="6" width="1" height="1" fill={color}/>
+        <rect x="2" y="7" width="1" height="1" fill={color}/>
+        <rect x="7" y="7" width="1" height="1" fill={color}/>
+        <rect x="3" y="8" width="1" height="1" fill={color}/>
+        <rect x="6" y="8" width="1" height="1" fill={color}/>
+        <rect x="4" y="9" width="2" height="1" fill={color}/>
+      </>
+    )}
+  </svg>
+);
+
+const PixelBookmark = ({ size = 16, filled = false, color = '#ffff00' }) => (
+  <svg width={size} height={size} viewBox="0 0 8 12" style={{ display:'block', imageRendering:'pixelated' }} xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="8" height="1" fill={color}/>
+    <rect x="0" y="0" width="1" height="10" fill={color}/>
+    <rect x="7" y="0" width="1" height="10" fill={color}/>
+    {filled && <rect x="1" y="1" width="6" height="9" fill={color}/>}
+    <rect x="0" y="9"  width="1" height="1" fill={color}/>
+    <rect x="7" y="9"  width="1" height="1" fill={color}/>
+    <rect x="1" y="10" width="1" height="1" fill={color}/>
+    <rect x="6" y="10" width="1" height="1" fill={color}/>
+    <rect x="2" y="11" width="1" height="1" fill={color}/>
+    <rect x="5" y="11" width="1" height="1" fill={color}/>
+    <rect x="3" y="10" width="2" height="2" fill="#000"/>
+  </svg>
+);
+
+const DoorIcon = ({ size = 20, color = '#666' }) => (
+  <svg width={size} height={size} viewBox="0 0 10 12" style={{ display:'block', imageRendering:'pixelated' }} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="10" height="12" fill={color}/>
+    <rect x="1" y="1" width="8" height="11" fill="#000"/>
+    <rect x="2" y="2" width="6" height="9" fill={color} opacity="0.15"/>
+    <rect x="6" y="6" width="1" height="1" fill={color}/>
+    <rect x="3" y="5" width="3" height="1" fill="#FF9500"/>
+    <rect x="2" y="5" width="1" height="1" fill="#FF9500"/>
+    <rect x="3" y="4" width="1" height="1" fill="#FF9500"/>
+    <rect x="3" y="6" width="1" height="1" fill="#FF9500"/>
+  </svg>
+);
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+// null = "blank" — no border, no color
+const APP_COLORS  = ['#00ff00','#00ffff','#ff00ff','#ffff00','#ff4400','#ffffff','#FF9500', null];
+const TAG_OPTIONS = ['H0t','R3LTD','N30'];
+const USER_COLORS = ['#FF9500','#00ff00','#00ffff','#ff00ff','#ffff00','#ff4400','#ffffff'];
+
+// ─── COLOR SWATCH ─────────────────────────────────────────────────────────────
+const ColorSwatch = ({ color, selected, onClick, size = 40 }) => {
+  const isBlank = color === null;
+  return (
+    <motion.button
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.9 }}
+      onClick={onClick}
+      style={{
+        width: size, height: size,
+        backgroundColor: isBlank ? '#000' : color,
+        border: selected ? '3px solid white' : isBlank ? '1px solid #333' : '1px solid #1a1a1a',
+        cursor: 'pointer',
+        boxShadow: selected && !isBlank ? `0 0 16px ${color}` : 'none',
+        transition: 'all 0.22s ease',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, position: 'relative', overflow: 'hidden',
+      }}
+    >
+      {isBlank && (
+        <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 14 14" style={{ display:'block' }}>
+          <line x1="1" y1="1" x2="13" y2="13" stroke="#ff0000" strokeWidth="2.5" strokeLinecap="square"/>
+          <line x1="13" y1="1" x2="1" y2="13" stroke="#ff0000" strokeWidth="2.5" strokeLinecap="square"/>
+        </svg>
+      )}
+    </motion.button>
+  );
+};
+
+
+
+const L0GN = ({ onLogin, previousUsers = [] }) => {
+  const [username,      setUsername]      = useState('');
+  const [isTyping,      setIsTyping]      = useState(false);
+  const [usernameColor, setUsernameColor] = useState('#FF9500');
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ backgroundColor:'#000', minHeight:'100vh', color:'white', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', padding:'24px' }}
+    >
+      <style>{GLOBAL_CSS}</style>
+
+      <motion.div
+        initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        style={{ marginBottom:'60px', textAlign:'center' }}
+      >
+        <h1 style={{ fontSize:'48px', color:'white', fontWeight:'bold', letterSpacing:'2px' }}>
+          R00M<span style={{ textTransform:'lowercase' }}>z</span>
+        </h1>
+      </motion.div>
+
+      <motion.div
+        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        style={{ width:'100%', maxWidth:'400px' }}
+      >
+        <div style={{ marginBottom:'20px', fontSize:'8px', color:'white', opacity:0.45, textTransform:'uppercase', letterSpacing:'1px' }}>
+          L0GN
+        </div>
+
+        {/* Input bar */}
+        <div style={{ display:'flex', alignItems:'center', borderBottom:`2px solid ${isTyping ? usernameColor : '#222'}`, paddingBottom:'8px', transition:'border-color 0.22s ease' }}>
+          <span style={{ marginRight:'12px', color: usernameColor, fontSize:'10px' }}>&gt;</span>
+          <input
+            autoFocus type="text" value={username} spellCheck="false" placeholder="_"
+            onChange={e=>{ setUsername(e.target.value); setIsTyping(e.target.value.length > 0); }}
+            onKeyDown={e=>e.key==='Enter'&&username.trim()&&onLogin(username.trim().toUpperCase(), usernameColor)}
+            style={{ flex:1, background:'transparent', border:'none', color: usernameColor, outline:'none', fontSize:'10px', textTransform:'uppercase', letterSpacing:'1px' }}
+          />
+          {isTyping && <div className="cursor-blink" style={{ background: usernameColor }}/>}
+        </div>
+
+        {/* Hint */}
+        <div style={{ marginTop:'16px', fontSize:'6px', color: username.length>0 ? 'white' : '#2a2a2a', opacity: username.length>0 ? 0.6 : 1, transition:'color 0.22s ease, opacity 0.22s ease', textTransform:'uppercase', letterSpacing:'1px' }}>
+          {username.length>0 ? '> PRESS [ENTER] TO_PROCEED' : '> WAITING_FOR_INPUT...'}
+        </div>
+
+        {/* Username color picker */}
+        <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.35 }} style={{ marginTop:'28px' }}>
+          <div style={{ fontSize:'6px', color:'#2a2a2a', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'12px' }}>&gt; USR_C0L0R</div>
+          <div style={{ display:'flex', gap:'10px', flexWrap:'wrap' }}>
+            {USER_COLORS.map((c, i) => (
+              <motion.button
+                key={c}
+                initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }} transition={{ delay: 0.38 + i * 0.04 }}
+                whileHover={{ scale:1.15 }} whileTap={{ scale:0.9 }}
+                onClick={() => setUsernameColor(c)}
+                style={{ width:'28px', height:'28px', backgroundColor: c, border: usernameColor===c ? '3px solid white' : '1px solid #222', cursor:'pointer', boxShadow: usernameColor===c ? `0 0 12px ${c}` : 'none', transition:'all 0.18s ease' }}
+              />
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Previous sessions */}
+        {previousUsers.length > 0 && (
+          <div style={{ marginTop:'36px' }}>
+            <div style={{ fontSize:'6px', color:'#2a2a2a', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'14px' }}>&gt; PREV_SESSIONS</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:'10px' }}>
+              {previousUsers.map((u, i) => {
+                const name  = u.name  || u;
+                const color = u.color || '#555';
+                return (
+                  <motion.button
+                    key={name}
+                    initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay: 0.4 + i * 0.05 }}
+                    whileHover={{ y:-2 }} whileTap={{ scale:0.95 }}
+                    style={{ background:'transparent', border:`1px solid ${color}`, color, fontFamily:"'Press Start 2P', cursive", fontSize:'8px', padding:'8px 14px', cursor:'pointer', textTransform:'uppercase', letterSpacing:'1px', transition:'border-color 0.18s ease, color 0.18s ease' }}
+                    onClick={() => onLogin(name, color)}
+                  >
+                    {name.length > 7 ? name.substring(0, 7) + '...' : name}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      <motion.div initial={{ opacity:0 }} animate={{ opacity:0.25 }} transition={{ delay:0.8 }} style={{ position:'absolute', bottom:'40px', textAlign:'center' }}>
+        <div style={{ fontSize:'8px', color:'white', letterSpacing:'2px' }}>MGNX 2026</div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// ─── HISTORY PANEL ───────────────────────────────────────────────────────────
+const HistoryPanel = ({ username, usernameColor, roomHistory, onClose, onNavigate }) => (
+  <motion.div
+    initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+    onClick={onClose}
+    style={{ position:'fixed', inset:0, backgroundColor:'rgba(0,0,0,0.7)', zIndex:300, backdropFilter:'blur(2px)', WebkitBackdropFilter:'blur(2px)' }}
+  >
+    <motion.div
+      initial={{ y:'100%' }} animate={{ y:0 }} exit={{ y:'100%' }}
+      transition={{ type:'spring', damping:25, stiffness:200 }}
+      onClick={e=>e.stopPropagation()}
+      style={{ position:'absolute', bottom:0, left:0, right:0, backgroundColor:'#0a0a0a', borderTop:`2px solid ${usernameColor}`, padding:'24px', maxHeight:'70vh', display:'flex', flexDirection:'column' }}
+    >
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'24px', flexShrink:0 }}>
+        <div>
+          <div style={{ fontSize:'6px', color:'#555', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'6px' }}>R00M HISTORY</div>
+          <div style={{ fontSize:'11px', color: usernameColor, fontWeight:'bold', textTransform:'uppercase', letterSpacing:'1px' }}>
+            &gt; {username.length > 12 ? username.substring(0, 12) + '...' : username}
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background:'none', border:'1px solid #222', color:'#555', fontSize:'8px', padding:'6px 12px', cursor:'pointer', textTransform:'uppercase', transition:'color 0.18s ease, border-color 0.18s ease' }}
+          onMouseEnter={e=>{ e.currentTarget.style.color='#fff'; e.currentTarget.style.borderColor='#555'; }}
+          onMouseLeave={e=>{ e.currentTarget.style.color='#555'; e.currentTarget.style.borderColor='#222'; }}
+        >✕ CLOSE</button>
+      </div>
+      <div style={{ overflowY:'auto', flex:1 }}>
+        {roomHistory.length === 0 ? (
+          <div style={{ fontSize:'8px', color:'#333', textTransform:'uppercase', letterSpacing:'1px', padding:'20px 0' }}>&gt; NO R00MS VISITED YET...</div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
+            {roomHistory.map((h, i) => {
+              const rc = h.color || '#444';
+              const formatTime = ts => {
+                const diff = Date.now() - ts, mins = Math.floor(diff/60000), hrs = Math.floor(diff/3600000);
+                if (mins < 1) return 'just now'; if (mins < 60) return `${mins}m ago`;
+                if (hrs < 24) return `${hrs}h ago`; return `${Math.floor(hrs/24)}d ago`;
+              };
+              return (
+                <motion.button key={h.id + h.visitedAt} initial={{ opacity:0, x:-10 }} animate={{ opacity:1, x:0 }} transition={{ delay: i*0.05 }}
+                  onClick={() => onNavigate(h.id)}
+                  style={{ background:'transparent', border:'none', borderLeft:`3px solid ${rc}`, padding:'14px 16px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', transition:'background 0.18s ease', width:'100%' }}
+                  onMouseEnter={e=>e.currentTarget.style.background='#111'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+                >
+                  <div style={{ textAlign:'left' }}>
+                    <div style={{ fontSize:'9px', color:rc, fontWeight:'bold', textTransform:'uppercase', marginBottom:'4px' }}>{h.name}</div>
+                    <div style={{ fontSize:'7px', color:'#444', textTransform:'uppercase', letterSpacing:'1px' }}>{h.description}</div>
+                  </div>
+                  <div style={{ fontSize:'6px', color:'#333', textTransform:'uppercase', letterSpacing:'1px', flexShrink:0, marginLeft:'16px' }}>{formatTime(h.visitedAt)}</div>
+                </motion.button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  </motion.div>
+);
+
+// ─── ROOMZ ────────────────────────────────────────────────────────────────────
+const MGNXRoomz = ({ onLogout, username, usernameColor }) => {
+  const [view,           setView]           = useState('directory');
+  const [selectedRoomId, setSelectedRoomId] = useState(null);
+  const [allRooms,       setAllRooms]       = useState([]);
+  const [roomContents,   setRoomContents]   = useState({});
+  const [allComments,    setAllComments]    = useState({});
+  const [blogComments,   setBlogComments]   = useState([]);
+  const [likes,          setLikes]          = useState({});
+  const [archives,       setArchives]       = useState({});
+  const [heartPop,       setHeartPop]       = useState({});
+  const [bookPop,        setBookPop]        = useState({});
+  const [isExpanded,     setIsExpanded]     = useState(false);
+  const [blogFullscreen, setBlogFullscreen] = useState(false);
+  const [isCommentsPaused, setIsCommentsPaused] = useState(false);
+  const [commentText,    setCommentText]    = useState('');
+  const [replyingTo,     setReplyingTo]     = useState(null);
+  const [newRoomTitle,   setNewRoomTitle]   = useState('');
+  const [newRoomContent, setNewRoomContent] = useState('');
+  const [selectedColor,  setSelectedColor]  = useState('#00ff00');
+  const [roomHistory,    setRoomHistory]    = useState([]);
+  const [showHistory,    setShowHistory]    = useState(false);
+  const [feedPaused,     setFeedPaused]     = useState(false);
+  const [feedStatus,     setFeedStatus]     = useState('LIVE');
+  const [lockedRoomId,   setLockedRoomId]   = useState(null); // room currently centered in view
+
+  const commentsEndRef  = useRef(null);
+  const replyInputRef   = useRef(null);
+  const feedScrollRef   = useRef(null);
+  const dragStartY      = useRef(null);
+  const roomCardRefs    = useRef({});
+
+  useEffect(() => {
+    if (!isCommentsPaused && commentsEndRef.current) {
+      commentsEndRef.current.scrollIntoView({ behavior:'smooth' });
+    }
+  }, [blogComments, isCommentsPaused]);
+
+  // ── Lock scroll to visible room when new rooms are added ─────────────────
+  useEffect(() => {
+    if (!lockedRoomId) return;
+    const el = roomCardRefs.current[lockedRoomId];
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ block: 'start', behavior: 'instant' });
+      });
+    }
+  }, [allRooms, lockedRoomId]);
+
+  const navigateTo = (nextView, roomId = null) => {
+    setView(nextView);
+    if (roomId !== null) setSelectedRoomId(roomId);
+    if (nextView === 'room' && roomId) {
+      setBlogComments(allComments[roomId] || []);
+      setIsExpanded(false); setBlogFullscreen(false); setIsCommentsPaused(false); setReplyingTo(null); setCommentText('');
+      const visited = allRooms.find(r => r.id === roomId);
+      if (visited) {
+        setRoomHistory(p => {
+          const filtered = p.filter(h => h.id !== roomId);
+          return [{ ...visited, visitedAt: Date.now() }, ...filtered].slice(0, 20);
+        });
+      }
+    }
+  };
+
+  const toggleLike = (roomId, e) => {
+    if (e) e.stopPropagation();
+    setLikes(prev => ({ ...prev, [roomId]: prev[roomId] ? 0 : 1 }));
+    setHeartPop(prev => ({ ...prev, [roomId]: Date.now() }));
+  };
+
+  const toggleArchive = (roomId, e) => {
+    if (e) e.stopPropagation();
+    setArchives(prev => ({ ...prev, [roomId]: !prev[roomId] }));
+    setBookPop(prev => ({ ...prev, [roomId]: Date.now() }));
+  };
+
+  const handlePostComment = () => {
+    if (!commentText.trim() || !selectedRoomId) return;
+    if (replyingTo) {
+      const updated = (allComments[selectedRoomId] || []).map(c =>
+        c.id === replyingTo.id
+          ? { ...c, replies: [...(c.replies||[]), { id:`r-${Date.now()}`, username, text:commentText, color: usernameColor }] }
+          : c
+      );
+      setAllComments(prev => ({ ...prev, [selectedRoomId]: updated }));
+      setBlogComments(updated);
+    } else {
+      const newC = { id:`c-${Date.now()}`, username, text:commentText, color: usernameColor, replies:[] };
+      const updated = [...(allComments[selectedRoomId]||[]), newC].slice(-40);
+      setAllComments(prev => ({ ...prev, [selectedRoomId]: updated }));
+      setBlogComments(updated);
+    }
+    setCommentText(''); setReplyingTo(null);
+  };
+
+  const handleCreateRoom = () => {
+    if (!newRoomTitle.trim() || !newRoomContent.trim()) return;
+    const newRoom = { id:`room-${Date.now()}`, name:newRoomTitle.toUpperCase(), description:`BY: ${username}`, color:selectedColor, isNew:true, createdAt:Date.now() };
+    setAllRooms(prev => [newRoom, ...prev]);
+    setRoomContents(prev => ({ ...prev, [newRoom.id]: newRoomContent }));
+    setAllComments(prev => ({ ...prev, [newRoom.id]: [] }));
+    setNewRoomTitle(''); setNewRoomContent(''); setSelectedColor('#00ff00');
+    navigateTo('room', newRoom.id);
+  };
+
+  const room           = allRooms.find(r => r.id === selectedRoomId);
+  const roomColor      = room?.color || '#444';
+  const currentContent = selectedRoomId ? (roomContents[selectedRoomId] || '') : '';
+
+  return (
+    <div style={{ backgroundColor:'#000', minHeight:'100vh', color:'white', overflow:'hidden' }}>
+      <style>{GLOBAL_CSS}</style>
+
+      <AnimatePresence mode="wait">
+
+        {/* ── GLOBAL FIXED UI ── */}
+        {view !== 'room' && (
+          <>
+            {/* Door logout — hidden on create view to avoid overlap with BACK */}
+            {view !== 'create' && (
+              <div style={{ position:'fixed', top:'24px', left:'24px', zIndex:200 }}>
+                <motion.button whileHover={{ opacity:1, scale:1.1 }} whileTap={{ scale:0.9 }} onClick={onLogout} title="LOGOUT"
+                  style={{ background:'transparent', border:'none', cursor:'pointer', padding:'4px', opacity:0.35, display:'flex', alignItems:'center', transition:'opacity 0.18s ease' }}
+                >
+                  <DoorIcon size={22} color="#888"/>
+                </motion.button>
+              </div>
+            )}
+
+            <div style={{ position:'fixed', bottom:'24px', left:'24px', zIndex:200 }}>
+              <motion.div whileHover={{ opacity:0.7 }} onClick={() => setShowHistory(true)}
+                style={{ fontSize:'11px', color: usernameColor, textTransform:'uppercase', letterSpacing:'1px', fontWeight:'bold', display:'flex', alignItems:'center', gap:'6px', cursor:'pointer' }}
+              >
+                <span style={{ opacity:0.6 }}>&gt;</span>
+                {username.length > 7 ? username.substring(0, 7) + '...' : username}
+              </motion.div>
+            </div>
+          </>
+        )}
+
+        {/* ── DIRECTORY ── */}
+        {view === 'directory' && (
+          <motion.div key="directory" initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+            style={{ height:'100vh', width:'100%', overflow:'hidden' }}
+          >
+            <div ref={feedScrollRef} style={{ height:'100%', overflowY:'auto', padding:'0 16px' }}>
+
+            {/* Sticky header */}
+            <div style={{ position:'sticky', top:0, zIndex:100, backgroundColor:'#000', paddingTop:'32px', paddingBottom:'20px' }}>
+              <div style={{ display:'flex', justifyContent:'center', alignItems:'center', position:'relative' }}>
+                {/* Title + live badge inline */}
+                <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                  <motion.button
+                    whileHover={{ opacity: 0.7 }}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => {
+                      setLockedRoomId(null);
+                      feedScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    style={{ background:'none', border:'none', cursor:'pointer', padding:0 }}
+                  >
+                    <span style={{ color:'white', fontSize:'24px', fontWeight:'bold', letterSpacing:'2px' }}>R00M<span style={{ textTransform:'lowercase' }}>z</span></span>
+                  </motion.button>
+                  {/* Clickable LIVE/PAUSED toggle */}
+                  <motion.button
+                    whileTap={{ scale:0.9 }}
+                    onClick={() => { setFeedPaused(p => !p); setFeedStatus(feedPaused ? 'LIVE' : 'PAUSED'); }}
+                    style={{ display:'flex', alignItems:'center', gap:'5px', marginTop:'2px', background:'none', border:'none', cursor:'pointer', padding:'2px 0' }}
+                  >
+                    <motion.div
+                      animate={{ opacity: feedPaused ? 1 : [1, 0.3, 1] }}
+                      transition={{ repeat: feedPaused ? 0 : Infinity, duration: 1.2 }}
+                      style={{ width:6, height:6, borderRadius:'50%', backgroundColor: feedPaused ? '#ff4400' : '#00ff00' }}
+                    />
+                    <span style={{ fontSize:'6px', color: feedPaused ? '#ff4400' : '#00ff00', textTransform:'uppercase', letterSpacing:'1px', fontFamily:"'Press Start 2P', cursive" }}>
+                      {feedPaused ? 'PAUSED' : 'LIVE'}
+                    </span>
+                  </motion.button>
+                </div>
+                {/* + button */}
+                <div style={{ position:'absolute', right:0 }}>
+                  <motion.button whileHover={{ scale:1.2, rotate:90, color:'#fff' }} whileTap={{ scale:0.8 }} onClick={()=>navigateTo('create')}
+                    style={{ backgroundColor:'transparent', border:'none', fontSize:'24px', color:'#444', cursor:'pointer', transition:'color 0.18s ease' }}
+                  >+</motion.button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:'40px', paddingBottom:'80px' }}>
+              {allRooms.length === 0 ? (
+                <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign:'center', padding:'100px 0', opacity:0.3 }}>
+                  <div style={{ fontSize:'10px', color:'#fff', textTransform:'uppercase', letterSpacing:'2px' }}>N0_R00M_F0UND...</div>
+                </motion.div>
+              ) : (
+                allRooms.map((r, idx) => {
+                  const rc         = r.color;
+                  const tag        = r.isNew ? 'N30' : TAG_OPTIONS[idx % TAG_OPTIONS.length];
+                  const isLiked    = !!likes[r.id];
+                  const isArchived = !!archives[r.id];
+                  const hPop       = heartPop[r.id];
+                  const bPop       = bookPop[r.id];
+                  return (
+                    <motion.button key={r.id}
+                      ref={el => { roomCardRefs.current[r.id] = el; }}
+                      initial={{ opacity:0, y: idx===0 ? -32 : 20 }} animate={{ opacity:1, y:0 }}
+                      transition={{ type:'spring', stiffness:280, damping:22, delay: idx===0 ? 0 : idx*0.06 }}
+                      whileHover={{ y:-4, boxShadow: rc ? `0 10px 0 ${rc}22` : 'none' }} whileTap={{ scale:0.98 }}
+                      onClick={()=>navigateTo('room', r.id)}
+                      style={{ width:'100%', backgroundColor:'#000', padding:'48px', border: lockedRoomId === r.id ? `2px solid ${rc}` : rc ? `1px solid ${rc}` : '1px solid #111', boxShadow: lockedRoomId === r.id ? `0 0 20px ${rc}44` : rc ? `0 4px 0 ${rc}14` : 'none', cursor:'pointer', position:'relative', minHeight:'260px', transition:'box-shadow 0.24s ease, border 0.24s ease' }}
+                    >
+                      <div style={{ position:'absolute', top:0, left:0, padding:'6px 12px', backgroundColor: rc || '#111' }}>
+                        <span style={{ color: rc ? '#000' : '#444', fontSize:'9px', fontWeight:'bold' }}>{tag}</span>
+                      </div>
+                      <div style={{ textAlign:'center' }}>
+                        <h3 style={{ fontSize:'14px', color: rc || '#666', marginBottom:'20px' }}>{r.name}</h3>
+                        <p style={{ color:'white', fontSize:'10px', opacity:0.65 }}>{r.description}</p>
+                      </div>
+                      <div style={{ position:'absolute', bottom:'24px', left:'32px', fontSize:'10px', color: rc || '#555' }}>
+                        {(() => { const n = likes[r.id] || 0; if (n >= 1000000000) return `${(n/1000000000).toFixed(1)}b`; if (n >= 1000000) return `${(n/1000000).toFixed(1)}m`; if (n >= 1000) return `${(n/1000).toFixed(1)}k`; return `${n}`; })()}
+                      </div>
+                      <div style={{ position:'absolute', bottom:'20px', right:'24px', display:'flex', gap:'16px', alignItems:'center' }}>
+                        <motion.div key={`h-${hPop}`} animate={hPop ? { scale:[1,1.5,1] } : {}} onClick={e=>toggleLike(r.id,e)} style={{ cursor:'pointer', display:'flex', alignItems:'center' }}>
+                          <PixelHeart size={18} filled={isLiked} color={isLiked?'#ff0000':'#2a2a2a'}/>
+                        </motion.div>
+                        <motion.div key={`b-${bPop}`} animate={bPop ? { scale:[1,1.5,1] } : {}} onClick={e=>toggleArchive(r.id,e)} style={{ cursor:'pointer', display:'flex', alignItems:'center' }}>
+                          <PixelBookmark size={18} filled={isArchived} color={isArchived?'#ffff00':'#2a2a2a'}/>
+                        </motion.div>
+                      </div>
+                    </motion.button>
+                  );
+                })
+              )}
+            </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── CREATE ── */}
+        {view === 'create' && (
+          <motion.div key="create"
+            initial={{ y:'100%', opacity:0 }} animate={{ y:0, opacity:1 }} exit={{ y:'100%', opacity:0 }}
+            transition={{ type:'spring', damping:25, stiffness:200 }}
+            style={{ backgroundColor:'#0a0a0a', height:'100vh', padding:'24px', color:'white', position:'fixed', inset:0, zIndex:100, overflowY:'auto' }}
+          >
+            {/* Header — BACK only, no door icon */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'40px' }}>
+              <motion.button whileHover={{ x:-4, color:'#fff' }} onClick={()=>navigateTo('directory')}
+                style={{ background:'none', border:'none', color:'#444', fontSize:'8px', cursor:'pointer', textTransform:'uppercase', transition:'color 0.18s ease' }}
+              >&lt; BACK</motion.button>
+              <span style={{ color:'white', fontSize:'10px', textTransform:'uppercase' }}>CR3ATE R00M</span>
+            </div>
+
+            <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.1 }} style={{ marginBottom:'24px' }}>
+              <label style={{ display:'block', fontSize:'8px', color:'#444', marginBottom:'8px', textTransform:'uppercase' }}>TTL</label>
+              <input type="text" value={newRoomTitle} onChange={e=>setNewRoomTitle(e.target.value)} placeholder="ROOM TITLE..."
+                style={{ width:'100%', background:'transparent', border:`2px solid ${selectedColor || '#333'}`, color:'white', padding:'12px', fontSize:'10px', outline:'none', fontFamily:'inherit', textTransform:'uppercase', transition:'border-color 0.22s ease' }}
+              />
+            </motion.div>
+
+            <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.2 }} style={{ marginBottom:'24px' }}>
+              <label style={{ display:'block', fontSize:'8px', color:'#444', marginBottom:'8px', textTransform:'uppercase' }}>BL0G</label>
+              <textarea value={newRoomContent} onChange={e=>setNewRoomContent(e.target.value)} placeholder="WRITE YOUR BROADCAST..."
+                style={{ width:'100%', background:'transparent', border:`2px solid ${selectedColor || '#333'}`, color:'white', padding:'12px', fontSize:'10px', outline:'none', fontFamily:'inherit', minHeight:'200px', resize:'vertical', transition:'border-color 0.22s ease' }}
+              />
+            </motion.div>
+
+            <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.3 }} style={{ marginBottom:'32px' }}>
+              <label style={{ display:'block', fontSize:'8px', color:'#444', marginBottom:'12px', textTransform:'uppercase' }}>C0L0R</label>
+              <div style={{ display:'flex', gap:'12px', flexWrap:'wrap' }}>
+                {APP_COLORS.map((c, i) => (
+                  <ColorSwatch key={i} color={c} selected={selectedColor === c} onClick={()=>setSelectedColor(c)} size={40}/>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.4 }}>
+              <motion.button whileHover={{ scale:1.02 }} whileTap={{ scale:0.98 }}
+                onClick={handleCreateRoom} disabled={!newRoomTitle.trim()||!newRoomContent.trim()}
+                style={{ width:'100%', backgroundColor: selectedColor || '#1a1a1a', color: selectedColor ? '#000' : '#555', border:'none', padding:'16px', fontSize:'10px', fontWeight:'bold', cursor:!newRoomTitle.trim()||!newRoomContent.trim()?'not-allowed':'pointer', textTransform:'uppercase', opacity:!newRoomTitle.trim()||!newRoomContent.trim()?0.2:1, transition:'opacity 0.22s ease', fontFamily:'inherit' }}
+              >PST</motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── ROOM VIEW ── */}
+        {view === 'room' && room && (
+          <motion.div key="room"
+            initial={{ x:'100%', opacity:0 }} animate={{ x:0, opacity:1 }} exit={{ x:'100%', opacity:0 }}
+            transition={{ type:'spring', damping:30, stiffness:250 }}
+            style={{ backgroundColor:'#000', height:'100vh', color:'white', display:'flex', flexDirection:'column', overflow:'hidden', position:'fixed', inset:0, zIndex:100 }}
+          >
+            {/* ── BLOG PREVIEW — compact postcard, ~half height ── */}
+            <div style={{ flexShrink:0, padding:'20px 20px 0' }}>
+
+              {/* Room header */}
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'12px' }}>
+                <motion.div initial={{ x:-20, opacity:0 }} animate={{ x:0, opacity:1 }}
+                  style={{ backgroundColor: roomColor, padding:'4px 10px' }}>
+                  <span style={{ color:'#000', fontSize:'8px', fontWeight:'bold', textTransform:'uppercase' }}>
+                    {room.isNew ? 'N30' : TAG_OPTIONS[allRooms.indexOf(room) % TAG_OPTIONS.length]}
+                  </span>
+                </motion.div>
+                <motion.div initial={{ x:20, opacity:0 }} animate={{ x:0, opacity:1 }} style={{ textAlign:'right', maxWidth:'68%' }}>
+                  <h1 style={{ fontSize:'10px', color: roomColor, textTransform:'uppercase', marginBottom:'4px', fontWeight:'bold' }}>{room.name}</h1>
+                  <div style={{ fontSize:'7px', color: roomColor, opacity:0.7, textTransform:'uppercase' }}>{room.description}</div>
+                </motion.div>
+              </div>
+
+              {/* Compact preview card — clicks to fullscreen */}
+              <motion.div initial={{ y:16, opacity:0 }} animate={{ y:0, opacity:1 }} transition={{ delay:0.2 }}
+                onClick={() => setBlogFullscreen(true)}
+                style={{
+                  border:`2px solid ${roomColor}`, padding:'14px 16px',
+                  height:'90px', overflow:'hidden', position:'relative',
+                  cursor:'pointer', transition:'border-color 0.22s ease',
+                  backgroundColor:'#050505'
+                }}
+              >
+                <p style={{ color:'#aaa', fontSize:'9px', lineHeight:'1.7', margin:0 }}>
+                  {currentContent?.substring(0, 160)}
+                </p>
+                {/* fade + READ prompt */}
+                <div style={{ position:'absolute', bottom:0, left:0, right:0, height:'48px', background:`linear-gradient(transparent, #050505)`, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'7px', pointerEvents:'none' }}>
+                  <span style={{ fontSize:'6px', color: roomColor, textTransform:'uppercase', letterSpacing:'2px', opacity:0.85 }}>▼ R34D BL0G</span>
+                </div>
+              </motion.div>
+
+              {/* LKE + ARCHVE */}
+              <div style={{ display:'flex', gap:'20px', padding:'10px 0', borderBottom:`1px solid ${roomColor}33`, alignItems:'center' }}>
+                <motion.button whileTap={{ scale:0.9 }} onClick={e=>toggleLike(selectedRoomId,e)}
+                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'7px', color: likes[selectedRoomId]?'#ff0000':'#444', fontSize:'9px', textTransform:'uppercase', transition:'color 0.2s ease' }}
+                >
+                  <motion.span key={`hlke-${heartPop[selectedRoomId]}`} animate={heartPop[selectedRoomId] ? { scale:[1,1.5,1] } : {}} style={{ display:'flex' }}>
+                    <PixelHeart size={12} filled={!!likes[selectedRoomId]} color={likes[selectedRoomId]?'#ff0000':'#444'}/>
+                  </motion.span>
+                  <span>{likes[selectedRoomId]?'LKD':'LKE'}</span>
+                </motion.button>
+                <motion.button whileTap={{ scale:0.9 }} onClick={e=>toggleArchive(selectedRoomId,e)}
+                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'7px', color: archives[selectedRoomId]?'#ffff00':'#444', fontSize:'9px', textTransform:'uppercase', transition:'color 0.2s ease' }}
+                >
+                  <motion.span key={`barch-${bookPop[selectedRoomId]}`} animate={bookPop[selectedRoomId] ? { scale:[1,1.5,1] } : {}} style={{ display:'flex' }}>
+                    <PixelBookmark size={12} filled={!!archives[selectedRoomId]} color={archives[selectedRoomId]?'#ffff00':'#444'}/>
+                  </motion.span>
+                  <span>{archives[selectedRoomId]?'ARCHVD':'ARCHVE'}</span>
+                </motion.button>
+              </div>
+            </div>
+
+            {/* ── FULLSCREEN BLOG OVERLAY ── */}
+            <AnimatePresence>
+              {blogFullscreen && (
+                <motion.div
+                  key="blog-fs"
+                  initial={{ y:'100%', opacity:0 }}
+                  animate={{ y:0, opacity:1 }}
+                  exit={{ y:'100%', opacity:0 }}
+                  transition={{ type:'spring', damping:28, stiffness:220 }}
+                  style={{
+                    position:'fixed', inset:0, zIndex:300,
+                    backgroundColor:'#000',
+                    display:'flex', flexDirection:'column',
+                    overflow:'hidden'
+                  }}
+                >
+                  {/* FS Header */}
+                  <div style={{ flexShrink:0, padding:'20px 24px 16px', borderBottom:`2px solid ${roomColor}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <div>
+                      <div style={{ fontSize:'7px', color: roomColor, opacity:0.6, textTransform:'uppercase', letterSpacing:'2px', marginBottom:'4px' }}>BL0G_V13W</div>
+                      <h1 style={{ fontSize:'11px', color: roomColor, textTransform:'uppercase', fontWeight:'bold' }}>{room.name}</h1>
+                    </div>
+                    <motion.button
+                      whileHover={{ scale:1.05, borderColor:'#555', color:'#fff' }}
+                      whileTap={{ scale:0.95 }}
+                      onClick={() => setBlogFullscreen(false)}
+                      style={{ background:'none', border:`1px solid #222`, color:'#555', fontSize:'7px', padding:'7px 14px', cursor:'pointer', textTransform:'uppercase', transition:'color 0.18s ease, border-color 0.18s ease', fontFamily:'inherit' }}
+                    >✕ CL0SE</motion.button>
+                  </div>
+                  {/* FS Content */}
+                  <div style={{ flex:1, overflowY:'auto', padding:'28px 24px 60px' }}>
+                    <p style={{ color:'white', fontSize:'11px', lineHeight:'2', whiteSpace:'pre-wrap' }}>
+                      {currentContent}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* ── COMMENTS — fills remaining space ── */}
+            <div style={{ flex:1, backgroundColor:'#080808', borderTop:`2px solid ${roomColor}`, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+              <div style={{ flexShrink:0, padding:'14px 20px 10px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:`1px solid ${roomColor}18` }}>
+                <h2 style={{ fontSize:'9px', color:'white', textTransform:'uppercase', fontWeight:'bold' }}>LIVE_CMNT_STREAM:</h2>
+                <button onClick={()=>setIsCommentsPaused(!isCommentsPaused)} style={{ background:'none', border:`1px solid ${roomColor}44`, color: roomColor, fontSize:'6px', padding:'4px 8px', cursor:'pointer', textTransform:'uppercase' }}>
+                  [{isCommentsPaused?'PLY':'PSE'}]
+                </button>
+              </div>
+
+              <div style={{ flex:1, overflowY:'auto', padding:'14px 20px' }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
+                  <AnimatePresence initial={false}>
+                    {blogComments.map((c, idx) => (
+                      <motion.div key={c.id+idx} initial={{ opacity:0, x:-10 }} animate={{ opacity:1, x:0 }}
+                        style={{ borderLeft:`3px solid ${c.color}`, paddingLeft:'12px', cursor:'pointer' }}
+                        onClick={()=>{ setReplyingTo(c); setTimeout(()=>replyInputRef.current?.focus(),50); }}
+                      >
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                          <span style={{ fontSize:'8px', color:c.color, fontWeight:'bold' }}>{c.username.length>7?c.username.substring(0,7)+'...':c.username}:</span>
+                          {replyingTo?.id===c.id&&<span style={{ fontSize:'6px', color:'#333', textTransform:'uppercase' }}>replying...</span>}
+                        </div>
+                        <p style={{ color:'white', fontSize:'9px', lineHeight:'1.6', marginTop:'4px' }}>{c.text}</p>
+                        {c.replies?.length>0&&(
+                          <div style={{ marginTop:'8px', paddingLeft:'18px', display:'flex', flexDirection:'column', gap:'8px' }}>
+                            {c.replies.map(r=>(
+                              <div key={r.id} style={{ borderLeft:`2px solid ${r.color}33`, paddingLeft:'10px' }}>
+                                <span style={{ fontSize:'7px', color:r.color, fontWeight:'bold' }}>{r.username.length>7?r.username.substring(0,7)+'...':r.username}:</span>
+                                <p style={{ color:'#aaa', fontSize:'8px', lineHeight:'1.5', marginTop:'3px' }}>{r.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  <div ref={commentsEndRef}/>
+                </div>
+              </div>
+
+              <div style={{ flexShrink:0, borderTop:`1px solid ${roomColor}18`, padding:'10px 16px', backgroundColor:'#080808' }}>
+                {replyingTo&&(
+                  <div style={{ fontSize:'6px', color: roomColor, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span>&gt; REPLYING TO {replyingTo.username}</span>
+                    <button onClick={()=>{ setReplyingTo(null); setCommentText(''); }} style={{ background:'none', border:'none', color:'#333', fontSize:'6px', cursor:'pointer', textTransform:'uppercase', transition:'color 0.18s ease' }}
+                      onMouseEnter={e=>e.currentTarget.style.color='#fff'} onMouseLeave={e=>e.currentTarget.style.color='#333'}
+                    >✕ CANCEL</button>
+                  </div>
+                )}
+                <div style={{ display:'flex', gap:'8px' }}>
+                  <input ref={replyInputRef} type="text" value={commentText}
+                    onChange={e=>setCommentText(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&handlePostComment()}
+                    placeholder={replyingTo?`REPLY TO ${replyingTo.username}...`:'LEAVE A COMMENT...'}
+                    style={{ flex:1, background:'transparent', border:`1px solid ${commentText.length>0?roomColor:'#1a1a1a'}`, color:'white', padding:'8px 10px', fontSize:'8px', outline:'none', fontFamily:'inherit', textTransform:'uppercase', transition:'border-color 0.2s ease' }}
+                  />
+                  <motion.button whileHover={{ scale:1.05 }} whileTap={{ scale:0.95 }} onClick={handlePostComment}
+                    style={{ backgroundColor:commentText.trim()?roomColor:'#0d0d0d', color:commentText.trim()?'#000':'#2a2a2a', border:'none', padding:'8px 14px', fontSize:'8px', fontWeight:'bold', cursor:commentText.trim()?'pointer':'default', textTransform:'uppercase', fontFamily:'inherit', transition:'background-color 0.2s ease, color 0.2s ease' }}
+                  >PST</motion.button>
+                </div>
+              </div>
+            </div>
+
+            <motion.button whileHover={{ x:4, color:'#fff', borderColor:'#444' }} onClick={()=>navigateTo('directory')}
+              style={{ position:'fixed', bottom:'20px', left:'20px', fontSize:'7px', color:'#333', background:'none', border:'1px solid #111', padding:'8px 14px', cursor:'pointer', textTransform:'uppercase', zIndex:100, transition:'color 0.18s ease, border-color 0.18s ease' }}
+            >&lt; EXIT</motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showHistory && (
+          <HistoryPanel username={username} usernameColor={usernameColor} roomHistory={roomHistory}
+            onClose={() => setShowHistory(false)}
+            onNavigate={(id) => { setShowHistory(false); navigateTo('room', id); }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+const App = () => {
+  const [activeUser,    setActiveUser]    = useState(null);
+  const [userColor,     setUserColor]     = useState('#FF9500');
+  const [previousUsers, setPreviousUsers] = useState([]);
+
+  const handleLogin = (name, color) => {
+    setActiveUser(name);
+    setUserColor(color || '#FF9500');
+    setPreviousUsers(p => {
+      const filtered = p.filter(u => (u.name||u) !== name);
+      return [{ name, color: color||'#FF9500' }, ...filtered].slice(0, 6);
+    });
+  };
+
+  return (
+    <div style={{ backgroundColor:'#000', minHeight:'100vh' }}>
+      <AnimatePresence mode="wait">
+        {!activeUser ? (
+          <motion.div key="login" initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
+            <L0GN onLogin={handleLogin} previousUsers={previousUsers} />
+          </motion.div>
+        ) : (
+          <motion.div key="app" initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
+            <MGNXRoomz onLogout={()=>setActiveUser(null)} username={activeUser} usernameColor={userColor} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default App;
